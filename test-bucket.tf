@@ -27,3 +27,17 @@ resource "aws_s3_bucket" "frontend" {
     Name = "Jenkins Bucket"
   }
 }
+
+resource "aws_s3_object" "armageddon_approval" {
+  bucket = aws_s3_bucket.frontend.id
+  key    = "armageddon-approval.png"
+  source = "${path.module}/files/armageddon-approval.png"
+  etag   = filemd5("${path.module}/files/armageddon-approval.png")
+}
+
+resource "aws_s3_object" "repo_links" {
+  bucket = aws_s3_bucket.frontend.id
+  key    = "repo-links.rtf"
+  source = "${path.module}/files/repo-links.rtf"
+  etag   = filemd5("${path.module}/files/repo-links.rtf")
+}
