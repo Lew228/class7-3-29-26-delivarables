@@ -78,3 +78,19 @@ resource "aws_s3_object" "bucket_items" {
   etag         = filemd5("${path.module}/files/bucket-items.png")
   content_type = "image/png"
 }
+
+resource "aws_s3_object" "webhook_trigger" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "webhook-trigger.png"
+  source       = "${path.module}/files/webhook-trigger.png"
+  etag         = filemd5("${path.module}/files/webhook-trigger.png")
+  content_type = "image/png"
+}
+
+resource "aws_s3_object" "jenkins_success" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "jenkins-success.png"
+  source       = "${path.module}/files/jenkins-success.png"
+  etag         = filemd5("${path.module}/files/jenkins-success.png")
+  content_type = "image/png"
+}
