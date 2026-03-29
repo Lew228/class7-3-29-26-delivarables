@@ -70,3 +70,11 @@ resource "aws_s3_object" "repo_links" {
   etag         = filemd5("${path.module}/files/repo-links.rtf")
   content_type = "application/rtf"
 }
+
+resource "aws_s3_object" "bucket_items" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "bucket-items.png"
+  source       = "${path.module}/files/bucket-items.png"
+  etag         = filemd5("${path.module}/files/bucket-items.png")
+  content_type = "image/png"
+}
