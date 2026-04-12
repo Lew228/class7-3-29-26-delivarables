@@ -4,67 +4,62 @@ pipeline {
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         TF_IN_AUTOMATION   = 'true'
-        SKIP_PIPELINE      = 'false'
+        SNYK_ORG           = credentials('snyk-org-slug')
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                script {
-                    def changedFiles = sh(
-                        script: '''
-                            if [ "$(git rev-list --count HEAD)" -eq 1 ]; then
-                                git ls-tree --name-only -r HEAD
-                            else
-                                git diff --name-only HEAD~1 HEAD
-                            fi
-                        ''',
-                        returnStdout: true
-                    ).trim().split('\n') as List
+            }
+        }
 
-                    echo "Changed files: ${changedFiles}"
-
-                    def nonDocChanges = changedFiles.findAll { file ->
-                        file?.trim() &&
-                        file != 'README.md' &&
-                        !file.startsWith('images/')
-                    }
-
-                    if (nonDocChanges.isEmpty()) {
-                        env.SKIP_PIPELINE = 'true'
-                        currentBuild.description = 'Skipped: README/images only'
-                        echo 'Only README.md or images/ changed. Skipping pipeline.'
-                    }
+        stage('Snyk IaC Scan Test') {
+            steps {
+                withCredentials([string(credentialsId: 'snyk-api-token-string', variable: 'SNYK_TOKEN')]) {
+                    sh '''
+                        export PATH=$PATH:/var/lib/jenkins/tools/io.snyk.jenkins.tools.SnykInstallation/snyk
+                        snyk-linux auth $SNYK_TOKEN
+                        snyk-linux iac test --org=$SNYK_ORG --severity-threshold=high || true
+                    '''
                 }
+            }
+        }        
+        stage('Snyk IaC Scan Monitor') {
+            steps {
+                snykSecurity(
+                    snykInstallation: 'snyk',
+                    snykTokenId: 'snyk-api-token',
+                    additionalArguments: '--iac --report --org=$SNYK_ORG --severity-threshold=high',
+                    failOnIssues: true,
+                    monitorProjectOnBuild: false
+                )
             }
         }
 
         stage('Terraform Init') {
-            when {
-                expression { env.SKIP_PIPELINE != 'true' }
-            }
             steps {
-                sh 'terraform init -reconfigure'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-iam-user-creds'
+                ]]) {
+                    sh 'terraform init'
+                }
             }
         }
 
-        stage('Terraform Apply') {
-            when {
-                expression { env.SKIP_PIPELINE != 'true' }
-            }
+        stage('Terraform Plan') {
             steps {
-                sh '''
-                    terraform plan -out=tfplan
-                    terraform apply -auto-approve tfplan
-                '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-iam-user-creds'
+                ]]) {
+                    sh 'terraform plan'
+                }
             }
         }
 
         stage('Optional Destroy') {
-            when {
-                expression { env.SKIP_PIPELINE != 'true' }
-            }
             steps {
                 script {
                     def destroyChoice = input(
@@ -78,8 +73,14 @@ pipeline {
                             )
                         ]
                     )
+
                     if (destroyChoice == 'yes') {
-                        sh 'terraform destroy -auto-approve'
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-iam-user-creds'
+                        ]]) {
+                            sh 'terraform destroy -auto-approve'
+                        }
                     } else {
                         echo "Skipping destroy"
                     }
